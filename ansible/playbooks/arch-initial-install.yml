@@ -297,7 +297,10 @@
         mode: "0755"
     - name: Clone the ansible repo
       ansible.builtin.command:
-        cmd: arch-chroot /mnt git clone <repo> /home/{{ user_name }}/Source/github/fred-drake
+        cmd: >
+          arch-chroot /mnt git clone
+          https://github.com/fred-drake/ansible-provision-workstation
+          /home/{{ user_name }}/Source/github/fred-drake/ansible-provision-workstation
       changed_when: true
     - name: Set recursive home directory ownership
       ansible.builtin.command:
