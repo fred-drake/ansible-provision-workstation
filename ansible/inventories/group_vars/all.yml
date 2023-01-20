@@ -1,0 +1,10 @@
+ansible_user: root
+ansible_ssh_pass: root
+ansible_ssh_common_args: -o "StrictHostKeyChecking no" -o "UserKnownHostsFile /dev/null"
+install_drive: /dev/sda
+wired_interface: eth0
+wireless_interface: wlan0
+boot_partition_suffix: "1"
+root_partition_suffix: "2"
+wired: false
+wireless: false

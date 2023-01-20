@@ -1,0 +1,25 @@
+luks_passphrase: ENC[AES256_GCM,data:zEm08gfx+CTb9lGOVeT4zcSIdzSQcMIWUDg=,iv:Sy3m1U6KYq04/sgQppSQU4gAfGzxuqN5lVgu1mFUjKU=,tag:CUXBKf9tj+Rwq4YAQxXuLw==,type:str]
+wireless_ssid: ENC[AES256_GCM,data:e5zV2zZOWq/CmA==,iv:J4u7rM4J4f8Im8FgpaYRC/c0POHudATBF1qvdjGC86s=,tag:oiya6EYWiv9duE+Cuq9+ng==,type:str]
+wireless_key: ENC[AES256_GCM,data:YIa0DnGhCDtrZ1t7,iv:lpN5oQO6cC/pTfeJmHw/cyRPGybflvsOSDxgTBE44Q4=,tag:bM6IH8krRo9giGiidFcQ+g==,type:str]
+user_name: ENC[AES256_GCM,data:PII3RJOx,iv:Ai/RLx/e0+IYLCc7yorH7/a8kXXtkG49pxwyEgi1Ahc=,tag:NRs0WX3BTTWk7t6b3W37Ng==,type:str]
+user_password: ENC[AES256_GCM,data:d4gxWWS3q5P2,iv:uzlJVHQraH3PKy9kwk+iJWEjKuuJLVNdBS5hNrBFino=,tag:UMMnBiIJGlf3hLoRCWpGVA==,type:str]
+sops:
+    kms: []
+    gcp_kms: []
+    azure_kv: []
+    hc_vault: []
+    age:
+        - recipient: age1ffag60kk9es84dk2yg7ppax6ygmg7a34hpve86d8w8l40k4fj3tq2zqxjg
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBQd3NNdzZqR3FuRDQ0V2lw
+            SmlkeTZXbDlUK0dsNk5jTjN6Z1hMNDdLV0RRClUvdFUyOHRSN3JRRmR5YzRLckw4
+            Nnk3QWFXakhuNEdwMjkvZnpJVGdTaWcKLS0tIE5iS0ZRbnpoUnJ4czJ5NHhWUVpO
+            dEQzM0NHcDFCK2hqZWlHNytCZHhMc28K/GP215ZQUr/e3rByndM/kHXWbsHxPJkG
+            VV4pPPdTadFY9fVxcX0lSQPUxoKuzH0ge0ASlCOLG/bMV89AjjUOqA==
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2023-01-20T00:35:44Z"
+    mac: ENC[AES256_GCM,data:mFmc+cM78L9irpdFLRr3hAzj4HFWzKtvYjuSlvhNOHO6ca/DWXRIUG8YAE5XeIs6NlJ5aCQRuitJLcqxshQxkiueb/iEXesQ2x2+gn2BQKckpvR4PVKzOCoVM2HDQCvL5mPivkab7YjXLgRT/Z1He7pL4S1D3C5ZGxFpHfKgN+E=,iv:x/xxVQyaPl9rPE1ScMw+7UkeNEmqV5jUsJZXcCNe4m0=,tag:jDP9T/qgUXrMWYVW+wYa7A==,type:str]
+    pgp: []
+    unencrypted_suffix: _unencrypted
+    version: 3.7.3

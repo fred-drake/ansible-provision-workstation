@@ -1,0 +1,7 @@
+ansible_host: 192.168.30.21
+boot_partition_suffix: p1
+install_drive: /dev/nvme0n1
+root_partition_suffix: p2
+wireless: true
+# wireless_interface: wlan0
+wireless_interface: wlo1

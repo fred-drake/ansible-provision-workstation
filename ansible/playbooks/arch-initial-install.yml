@@ -1,0 +1,312 @@
+- name: Initial Arch Install
+  hosts: all
+  tasks:
+    - name: Abort if the host is not booted from the Arch install media
+      ansible.builtin.fail:
+        msg: "This host is not booted from the Arch install media!"
+      when: ansible_nodename != 'archiso'
+    - name: Wipe existing system
+      block:
+        - name: Unmount boot system
+          ansible.posix.mount:
+            path: /mnt/boot
+            state: unmounted
+        - name: Unmount root system
+          ansible.posix.mount:
+            path: /mnt
+            state: unmounted
+        - name: Destroy existing LUKS volume
+          community.crypto.luks_device:
+            device: /dev/VolumeGroup00/root
+            state: absent
+        - name: Wipe install drive and all of its partitions
+          ansible.builtin.command:
+            cmd: wipefs --all --force "{{ install_drive }}"
+          changed_when: true
+        - name: Remove existing volume group
+          community.general.lvg:
+            vg: VolumeGroup00
+            force: true
+            state: absent
+    - name: Synchronize clock via NTP
+      ansible.builtin.command: timedatectl set-ntp true
+      changed_when: true
+    - name: Create boot partition
+      community.general.parted:
+        device: "{{ install_drive }}"
+        label: gpt
+        number: 1
+        part_end: 512MB
+        name: boot
+        flags:
+          - boot
+          - esp
+        state: present
+    - name: Create root partition
+      community.general.parted:
+        device: "{{ install_drive }}"
+        label: gpt
+        number: 2
+        part_start: 512MB
+        name: root
+        flags:
+          - lvm
+        state: present
+    - name: Configure volume group
+      community.general.lvg:
+        vg: VolumeGroup00
+        pvs:
+          - "{{ install_drive }}{{ root_partition_suffix }}"
+    - name: Configure logical volume
+      community.general.lvol:
+        vg: VolumeGroup00
+        lv: root
+        size: 100%FREE
+
+    - name: Setup LUKS encryption for root filesystem
+      block:
+        - name: Create and open LUKS volume
+          community.crypto.luks_device:
+            device: /dev/VolumeGroup00/root
+            passphrase: "{{ luks_passphrase }}"
+            name: root
+            state: opened
+        - name: Get UUID for root LUKS volume
+          ansible.builtin.command:
+            cmd: blkid -s UUID -o value /dev/VolumeGroup00/root
+          register: root_luks_uuid
+          changed_when: false
+    - name: Create FAT32 filesystem in boot partition
+      community.general.filesystem:
+        dev: "{{ install_drive }}{{ boot_partition_suffix }}"
+        fstype: vfat
+        opts: -F32
+        force: true
+    - name: Create ext4 filesystem in root volume
+      community.general.filesystem:
+        dev: /dev/mapper/root
+        fstype: ext4
+        force: true
+    - name: Get UUID for boot filesystem
+      ansible.builtin.command:
+        cmd: blkid -s UUID -o value "{{ install_drive }}{{ boot_partition_suffix }}"
+      register: boot_uuid
+      changed_when: false
+    - name: Get UUID for root filesystem
+      ansible.builtin.command:
+        cmd: blkid -s UUID -o value /dev/mapper/root
+      register: root_uuid
+      changed_when: false
+    - name: Mount root filesystem
+      ansible.posix.mount:
+        path: /mnt
+        src: "UUID={{ root_uuid.stdout }}"
+        fstype: ext4
+        state: mounted
+    - name: Create mountpoint for boot volume
+      ansible.builtin.file:
+        path: /mnt/boot
+        state: directory
+        mode: "0755"
+    - name: Mount boot filesystem
+      ansible.posix.mount:
+        path: /mnt/boot
+        src: "UUID={{ boot_uuid.stdout }}"
+        fstype: vfat
+        state: mounted
+    - name: Run pacstrap
+      ansible.builtin.command:
+        cmd: >
+          pacstrap /mnt
+            base
+            base-devel
+            dhclient
+            dhcpcd
+            efibootmgr
+            grub
+            linux
+            linux-firmware
+            lvm2
+            netctl
+            openssh
+            python
+            reflector
+            sudo
+            wpa_supplicant
+            ansible
+            git
+      changed_when: true
+    - name: Restrict reflector to only US mirrors
+      ansible.builtin.lineinfile:
+        insertafter: \# --country
+        line: --country "United States"
+        path: /mnt/etc/xdg/reflector/reflector.conf
+    - name: Generate blank fstab
+      ansible.builtin.command:
+        cmd: genfstab -U /mnt >> /mnt/etc/fstab
+      changed_when: true
+    - name: Add root volume to fstab
+      ansible.posix.mount:
+        fstab: /mnt/etc/fstab
+        path: /
+        src: "UUID={{ root_uuid.stdout }}"
+        fstype: ext4
+        opts: defaults
+        passno: "1"
+        state: present
+    - name: Add boot volume to fstab
+      ansible.posix.mount:
+        fstab: /mnt/etc/fstab
+        path: /boot
+        src: "UUID={{ boot_uuid.stdout }}"
+        fstype: vfat
+        opts: defaults
+        passno: "2"
+        state: present
+
+    - name: Set local timezone
+      ansible.builtin.command:
+        cmd: arch-chroot /mnt ln -sf /usr/share/zoneinfo/America/New_York /etc/localtime
+      changed_when: true
+    - name: Generate adjtime file
+      ansible.builtin.command:
+        cmd: arch-chroot /mnt hwclock --systohc
+      changed_when: true
+    - name: Configure locale.gen
+      ansible.builtin.lineinfile:
+        dest: /mnt/etc/locale.gen
+        regexp: "{{ item.regex }}"
+        line: "{{ item.line }}"
+      loop:
+        - regex: en_US\.UTF-8 UTF-8
+          line: en_US.UTF-8 UTF-8
+        - regex: en_US ISO-8859-1
+          line: en_US ISO-8859-1
+    - name: Create locale.conf
+      ansible.builtin.copy:
+        content: "LANG=en_US.UTF-8"
+        dest: /mnt/etc/locale.conf
+        mode: "0644"
+    - name: Generate locales
+      ansible.builtin.command:
+        cmd: arch-chroot /mnt locale-gen
+      changed_when: true
+    - name: Set hostname
+      ansible.builtin.copy:
+        content: "{{ inventory_hostname }}"
+        dest: /mnt/etc/hostname
+        mode: "0644"
+
+    - name: Create netctl profile for wired connection
+      ansible.builtin.copy:
+        content: |
+          Description='Wired with DHCP'
+          Interface={{ wired_interface }}
+          Connection=ethernet
+          IP=dhcp
+          IP6=dhcp-noaddr
+          ExecUpPost='/usr/bin/ip link set {{ wired_interface }} mtu 1480'
+        dest: /mnt/etc/netctl/wired
+        mode: "0644"
+      when: wired
+    - name: Enable wired netctl profile to start at boot
+      ansible.builtin.command:
+        cmd: arch-chroot /mnt netctl enable wired
+      changed_when: true
+      when: wired
+
+    - name: Create netctl profile for wireless connection
+      ansible.builtin.copy:
+        content: |
+          Description='Wireless with DHCP'
+          Interface={{ wireless_interface }}
+          Connection=wireless
+          Security=wpa
+          IP=dhcp
+          ESSID='{{ wireless_ssid }}'
+          Key='{{ wireless_key }}'
+        dest: /mnt/etc/netctl/wireless
+        mode: "0644"
+      when: wireless
+    - name: Enable wireless netctl profile to start at boot
+      ansible.builtin.command:
+        cmd: arch-chroot /mnt netctl enable wireless
+      changed_when: true
+      when: wireless
+
+    - name: Add mkinitcpio.conf hooks
+      ansible.builtin.lineinfile:
+        dest: /mnt/etc/mkinitcpio.conf
+        regexp: ^HOOKS=
+        line: HOOKS=(base udev autodetect keyboard keymap modconf block encrypt lvm2 filesystems fsck)
+    - name: Create new initramfs
+      ansible.builtin.command:
+        cmd: arch-chroot /mnt mkinitcpio -p linux
+      changed_when: true
+
+    - name: Add commandline information to grub config
+      ansible.builtin.lineinfile:
+        dest: /mnt/etc/default/grub
+        regexp: ^GRUB_CMDLINE_LINUX=
+        line: GRUB_CMDLINE_LINUX="cryptdevice=UUID={{ root_luks_uuid.stdout }}:root root=/dev/mapper/root"
+    - name: Install grub
+      ansible.builtin.command:
+        cmd: arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
+      changed_when: true
+    - name: Create grub config
+      ansible.builtin.command:
+        cmd: arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg
+      changed_when: true
+
+    - name: Create user account
+      ansible.builtin.command:
+        cmd: >
+          arch-chroot /mnt
+          useradd
+          --create-home
+          --user-group
+          --groups wheel "{{ user_name }}"
+          --password "{{ user_password | password_hash('sha512') }}"
+      changed_when: true
+    - name: Create home directory
+      ansible.builtin.file:
+        path: /mnt/home/{{ user_name }}
+        state: directory
+        mode: "0755"
+    - name: Give passwordless sudo access to wheel group
+      ansible.builtin.copy:
+        content: "%wheel ALL=(ALL) NOPASSWD: ALL"
+        dest: /mnt/etc/sudoers.d/wheel
+        validate: /usr/sbin/visudo --check --file=%s
+        mode: "0644"
+
+    - name: Create age directory
+      ansible.builtin.file:
+        path: "/mnt/home/{{ user_name }}/.age"
+        state: directory
+        mode: "0700"
+    - name: Apply age key
+      ansible.builtin.copy:
+        src: "{{ lookup('ansible.builtin.env', 'SOPS_AGE_KEY_FILE') }}"
+        dest: "/mnt/home/{{ user_name }}/.age/personal-key.txt"
+        mode: "0600"
+    - name: Create ansible source directory
+      ansible.builtin.file:
+        path: "/mnt/home/{{ user_name }}/Source/github/fred-drake"
+        state: directory
+        mode: "0755"
+    - name: Clone the ansible repo
+      ansible.builtin.command:
+        cmd: arch-chroot /mnt git clone <repo> /home/{{ user_name }}/Source/github/fred-drake
+      changed_when: true
+    - name: Set recursive home directory ownership
+      ansible.builtin.command:
+        cmd: arch-chroot /mnt chown -R {{ user_name }}:{{ user_name }} /home/{{ user_name }}
+      changed_when: true
+
+    - name: Reboot and immediately finish
+      ansible.builtin.command:
+        cmd: reboot
+      async: 5
+      poll: 0
+      changed_when: true
