@@ -23,26 +23,27 @@
       when: not yay_file.stat.exists
       block:
         - name: Get temp directory
-          become: true
+          become: false
           ansible.builtin.tempfile:
             state: directory
             suffix: _yay
           register: yay_build_dir
         - name: Pull yay git repo
-          become: true
+          become: false
           ansible.builtin.git:
             repo: https://aur.archlinux.org/yay.git
             dest: "{{ yay_build_dir.path }}"
             depth: 1
         - name: Make package
-          become: true
+          become: false
           ansible.builtin.command:
-            cmd: makepkg -si
+            cmd: makepkg --noconfirm -si
+            chdir: "{{ yay_build_dir.path }}"
           changed_when: true
         - name: Clean temp directory
-          become: true
+          become: false
           ansible.builtin.file:
-            src: "{{ yay_build_dir }}"
+            src: "{{ yay_build_dir.path }}"
             state: absent
     - name: Dotfiles
       block:

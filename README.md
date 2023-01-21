@@ -52,7 +52,6 @@ Go to your source directory on that machine, run the `direnv` commands shown bel
 
 ```bash
 $ cd ~/Source/github/$GITHUB_USERNAME/ansible-provision-workstation
-$ eval $(direnv hook bash)
 $ direnv allow .
 $ ansible-playbook ansible/playbooks/site.yml --limit $DEVICE_NAME
 ```
