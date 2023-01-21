@@ -136,6 +136,7 @@
             ansible
             git
             direnv
+            sops
       changed_when: true
     - name: Restrict reflector to only US mirrors
       ansible.builtin.lineinfile:
