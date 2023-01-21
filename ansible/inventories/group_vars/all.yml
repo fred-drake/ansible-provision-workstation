@@ -8,3 +8,4 @@ boot_partition_suffix: "1"
 root_partition_suffix: "2"
 wired: false
 wireless: false
+github_username: fred-drake

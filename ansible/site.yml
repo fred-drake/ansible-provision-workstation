@@ -1,0 +1,93 @@
+- name: Arch Provision
+  hosts: all
+  connection: local
+  tasks:
+    - name: Change user shell to zshrc
+      block:
+        - name: Install zsh and shell support libraries
+          community.general.pacman:
+            name:
+              - zsh
+              - zsh-completions
+        - name: Update default shell
+          ansible.builtin.user:
+            name: "{{ user_name }}"
+            shell: /bin/zsh
+    - name: Stat yay binary
+      ansible.builtin.stat:
+        path: /bin/yay
+      register: yay_file
+    - name: Install yay
+      when: not yay_file.stat.exists
+      block:
+        - name: Get temp directory
+          ansible.builtin.tempfile:
+            state: directory
+            suffix: _yay
+          register: yay_build_dir
+        - name: Pull yay git repo
+          ansible.builtin.git:
+            repo: https://aur.archlinux.org/yay.git
+            dest: "{{ yay_build_dir.path }}"
+            depth: 1
+        - name: Make package
+          ansible.builtin.command:
+            cmd: makepkg -si
+          changed_when: true
+    - name: Dotfiles
+      block:
+        - name: Set machine ID file for dotfiles
+          become: false
+          ansible.builtin.copy:
+            content: "{{ inventory_hostname_short }}"
+            dest: "{{ ansible_env.HOME }}/machine_id"
+            mode: "0644"
+        - name: Install chezmoi library
+          community.general.pacman:
+            name: chezmoi
+            state: present
+            update_cache: true
+        - name: Initialize dotfiles from github
+          become: false
+          ansible.builtin.command:
+            cmd: chezmoi --no-tty init {{ github_username }}
+          changed_when: true
+        - name: Perform initial update to get encryption information
+          become: false
+          ansible.builtin.command:
+            cmd: chezmoi --no-tty apply -c {{ ansible_env.HOME }}/.local/share/chezmoi/home/dot_config/chezmoi/chezmoi-initial.yaml
+          changed_when: true
+        - name: Perform subsequent update for all dotfiles
+          become: false
+          ansible.builtin.command:
+            cmd: chezmoi --no-tty apply
+          changed_when: true
+
+    - name: Post-dotfiles setup
+      block:
+        - name: Apply xorg configuration
+          ansible.builtin.template:
+            src: "{{ playbok_dir }}/templates/xorg/90-touchpad.conf"
+            dest: /etc/X11/xorg.conf.d
+            mode: "0644"
+
+    # - name: Add initial libraries
+    #   community.general.pacman:
+    #     name:
+    #       - xorg
+    #       - xorg-xinit
+    #       - i3-wm
+    #       - i3lock
+    #       - i3status
+    #       - i3blocks
+    #       - dmenu
+    #       - alacritty
+    #       - firefox
+    #     state: present
+    # - name: Copy xinitrc
+    #   ansible.builtin.copy:
+    #     src: /etc/X11/xinit/xinitrc
+    #     dest: /home/{{ user_name }}/.xinitrc
+    #     mode: "0644"
+    #     owner: "{{ user_name }}"
+    #     group: "{{ user_name }}"
