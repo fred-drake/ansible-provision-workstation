@@ -1,3 +1,4 @@
+# vi: ft=yaml.ansible
 - name: Initial Arch Install
   hosts: all
   tasks:
@@ -303,6 +304,26 @@
           arch-chroot /mnt git clone
           https://github.com/{{ github_username }}/ansible-provision-workstation
           /home/{{ user_name }}/Source/github/{{ github_username }}/ansible-provision-workstation
+      changed_when: true
+    - name: Install ansible galaxy requirements
+      ansible.builtin.command:
+        cmd: >
+          arch-chroot /mnt /bin/bash -c
+          "cd /home/{{ user_name }}/Source/github/{{ github_username }}/ansible-provision-workstation &&
+          ansible-galaxy install -r galaxy-requirements.yml"
+      changed_when: true
+      retries: 10
+      delay: 10
+    - name: Set workable bashrc
+      ansible.builtin.copy:
+        content: |
+          [[ $- != *i* ]] && return
+          alias ls='ls --color=auto'
+          PS1='[\u@\h \W]\$ '
+          eval "$(direnv hook bash)"
+
+        dest: "/mnt/home/{{ user_name }}/.bashrc"
+        mode: "0644"
       changed_when: true
     - name: Set recursive home directory ownership
       ansible.builtin.command:
