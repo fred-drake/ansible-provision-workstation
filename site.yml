@@ -43,7 +43,7 @@
         - name: Clean temp directory
           become: false
           ansible.builtin.file:
-            src: "{{ yay_build_dir.path }}"
+            path: "{{ yay_build_dir.path }}"
             state: absent
     - name: Dotfiles
       block:
