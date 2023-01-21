@@ -1,5 +1,7 @@
+# vi: ft=yaml.ansible
 - name: Arch Provision
   hosts: all
+  become: false
   connection: local
   tasks:
     - name: Change user shell to zshrc
@@ -23,32 +25,27 @@
       when: not yay_file.stat.exists
       block:
         - name: Get temp directory
-          become: false
           ansible.builtin.tempfile:
             state: directory
             suffix: _yay
           register: yay_build_dir
         - name: Pull yay git repo
-          become: false
           ansible.builtin.git:
             repo: https://aur.archlinux.org/yay.git
             dest: "{{ yay_build_dir.path }}"
             depth: 1
         - name: Make package
-          become: false
           ansible.builtin.command:
             cmd: makepkg --noconfirm -si
             chdir: "{{ yay_build_dir.path }}"
           changed_when: true
         - name: Clean temp directory
-          become: false
           ansible.builtin.file:
             path: "{{ yay_build_dir.path }}"
             state: absent
     - name: Dotfiles
       block:
         - name: Set machine ID file for dotfiles
-          become: false
           ansible.builtin.copy:
             content: "{{ inventory_hostname_short }}"
             dest: "{{ ansible_env.HOME }}/machine_id"
@@ -60,17 +57,23 @@
             state: present
             update_cache: true
         - name: Initialize dotfiles from github
-          become: false
           ansible.builtin.command:
             cmd: chezmoi --no-tty init {{ github_username }}
           changed_when: true
-        - name: Perform initial update to get encryption information
-          become: false
+        - name: Check for existing chezmoi config
+          ansible.builtin.stat:
+            path: "{{ ansible_env.HOME }}/.config/chezmoi/chezmoi.yaml"
+          register: chezmoi_config
+        - name: Re-add any changed chezmoi files in destination
+          ansible.builtin.command:
+            cmd: chezmoi re-add
+          changed_when: true
+        - name: Perform chezmoi initial update
           ansible.builtin.command:
             cmd: chezmoi --no-tty apply -c {{ ansible_env.HOME }}/.local/share/chezmoi/home/dot_config/chezmoi/chezmoi-initial.yaml
           changed_when: true
-        - name: Perform subsequent update for all dotfiles
-          become: false
+          when: not chezmoi_config.stat.exists
+        - name: Perform regular chezmoi update
           ansible.builtin.command:
             cmd: chezmoi --no-tty apply
           changed_when: true
@@ -83,24 +86,14 @@
             src: "{{ playbook_dir }}/templates/xorg/90-touchpad.conf"
             dest: /etc/X11/xorg.conf.d
             mode: "0644"
-
-    # - name: Add initial libraries
-    #   community.general.pacman:
-    #     name:
-    #       - xorg
-    #       - xorg-xinit
-    #       - i3-wm
-    #       - i3lock
-    #       - i3status
-    #       - i3blocks
-    #       - dmenu
-    #       - alacritty
-    #       - firefox
-    #     state: present
-    # - name: Copy xinitrc
-    #   ansible.builtin.copy:
-    #     src: /etc/X11/xinit/xinitrc
-    #     dest: /home/{{ user_name }}/.xinitrc
-    #     mode: "0644"
-    #     owner: "{{ user_name }}"
-    #     group: "{{ user_name }}"
+        - name: Enable SDDM login manager at boot
+          become: true
+          ansible.builtin.systemd:
+            name: sddm
+            enabled: true
+        - name: Set SDDM configuration
+          become: true
+          ansible.builtin.lineinfile:
+            path: /usr/share/sddm/scripts/Xsetup
+            regexp: ^setxkbmap -layout us -option ctrl\:nocaps
+            line: setxkbmap -layout us -option ctrl:nocaps
