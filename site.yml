@@ -94,13 +94,19 @@
         - name: Apply xorg configuration
           become: true
           ansible.builtin.template:
-            src: "{{ playbook_dir }}/templates/xorg/90-touchpad.conf"
+            src: "{{ item }}"
             dest: /etc/X11/xorg.conf.d
             mode: "0644"
+          loop: "{{ lookup('fileglob', 'templates/xorg/*', wantlist=True) }}"
         - name: Enable SDDM login manager at boot
           become: true
           ansible.builtin.systemd:
             name: sddm
+            enabled: true
+        - name: Enable CUPS at boot
+          become: true
+          ansible.builtin.systemd:
+            name: cups
             enabled: true
         - name: Set SDDM configuration
           become: true
